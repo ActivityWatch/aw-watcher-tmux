@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# FIXME: Not tested with multiple sessions, unlikely to work in that case
+
+# Useful variables
+# Find more in the FORMATS section in the tmux manpage
+#
+# session_name - name of current session
+#              (Example: "vim /home/erb")
+# window_name - name of current pane.
+#               (Example: "activitywatch" (manually set), "vim" (automatically set)
+# pane_title - title of current pane
+#              (Example: "vim /home/erb")
+
+# echo "$(tmux list-panes -F '{"pane_id": "#{pane_id}", "pane_title": "#{pane_title}"}')"
+# echo "$(tmux list-windows -F '{"window_id": "#{window_id}", "window_name": "#{window_name}"}')"
+
+TESTING=1
+TMPERRFILE=$(mktemp)
+#echo $TMPERRFILE
+
+while true; do
+    JSON="$(tmux display -p '[
+                              "session_name:#{session_name}",
+                              "window_name:#{window_name}",
+                              "pane_title:#{pane_title}",
+                              "pane_current_command:#{pane_current_command}",
+                              "pane_current_path:#{pane_current_path}"
+                             ]')";
+
+
+    #if [[ "$TESTING" -eq "1" ]]; then
+    #    jq -cC . <<< $JSON
+    #fi
+
+    JSON_OBJ="$(echo $JSON | jq -cM .)"
+    DATA="{\"label\": $JSON_OBJ}"
+
+    # echo "$DATA"
+
+    RESPONSE=$(
+    curl -v --header "Content-Type: application/json" \
+         --data "$DATA" \
+         "http://127.0.0.1:5666/api/0/buckets/aw-watcher-tmux_test2/heartbeat?create_bucket=1&pulsetime=2" \
+        2> $TMPERRFILE
+    )
+    ERRCODE=$?
+
+    if [[ "$ERRCODE" -ne "0" ]]; then
+        echo "Request failed"
+        cat $TMPERRFILE
+    fi
+
+    if [[ "$TESTING" -eq "1" ]]; then
+        jq -C . <<< $RESPONSE
+    fi
+
+
+    sleep 1
+done
